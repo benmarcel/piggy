@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  username    String
+  email       String   @unique
+  password    String
+  isActivated Boolean  @default(false)
+
+  pigs            Pig[]
+  pens            Pen[]
+  tokens          Token[]
+  breedingRecords Breeding[]
+  healthRecord    Health[]
+}
+
+model Token {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  token     String    @unique
+  type      TokenType
+  expiresAt DateTime
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Pen {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  capacity  Int
+  createdAt DateTime @default(now())
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+  pigs   Pig[]
+}
+
+model Pig {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  tag       String    
+  name      String?
+  sex       Sex
+  breed     String?
+  birthDate DateTime?
+  weight    Float?
+  status    PigStatus @default(ACTIVE)
+  createdAt DateTime  @default(now())
+
+  userId String  @db.ObjectId
+  user   User    @relation(fields: [userId], references: [id])
+  penId  String? @db.ObjectId
+  pen    Pen?    @relation(fields: [penId], references: [id])
+
+  breedingsAsSow  Breeding[] @relation("SowBreedings")
+  breedingsAsBoar Breeding[] @relation("BoarBreedings")
+  healthRecords   Health[]
+
+  @@unique([userId, tag])  // unique per farmer, not globally
+}
+
+model Breeding {
+  id                    String         @id @default(auto()) @map("_id") @db.ObjectId
+  serviceDate           DateTime
+  expectedFarrowingDate DateTime
+  actualFarrowingDate   DateTime?
+  litterSize            Int?
+  status                BreedingStatus @default(BRED)
+  createdAt             DateTime       @default(now())
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  sowId String @db.ObjectId
+  sow   Pig    @relation("SowBreedings", fields: [sowId], references: [id])
+
+  boarId String @db.ObjectId
+  boar   Pig    @relation("BoarBreedings", fields: [boarId], references: [id])
+}
+
+model Health {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId  
+  type      HealthType
+  notes     String?
+  dueDate   DateTime?
+  doneAt    DateTime?
+  createdAt DateTime   @default(now())
+
+  userId String @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id])
+
+  pigId String @db.ObjectId
+  pig   Pig    @relation(fields: [pigId], references: [id])
+}
+
+enum Sex {
+  MALE
+  FEMALE
+}
+
+enum PigStatus {
+  ACTIVE
+  SOLD
+  DECEASED
+  QUARANTINE
+}
+
+enum BreedingStatus {
+  BRED
+  FARROWED
+  FAILED
+}
+
+enum HealthType {
+  VACCINATION
+  DEWORMING
+  TREATMENT
+  CHECKUP
+  FOLLOWUP
+}
+
+enum TokenType {
+  ACTIVATE
+  RESET
+}
