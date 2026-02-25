@@ -1,80 +1,109 @@
-
-import bcrypt from "bcrypt"
-import jwt from "jsonwebtoken"
-import crypto from 'crypto';
-import {prisma} from '../lib/prisma';
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
+import { prisma } from "../lib/prisma";
 import { sendActivationEmail } from "../lib/mailer";
+
+// helper function
+import { getExpiryDate } from "../utils/date";
+import { AppError } from "../utils/AppError";
 interface RegisterInput {
-    username: string;
-    email: string;
-    password: string;
+  username: string;
+  email: string;
+  password: string;
 }
 
-
-
 export class AuthService {
-    // register a new user
-    async register({ username, email, password }: RegisterInput) {
-        // check if the user already exists
-        const existingUser = await prisma.user.findUnique({ where: { email } });
-        if (existingUser) {
-            throw new Error("User already exists");
-        }
-        // hash the password
-        const hashedPassword = await bcrypt.hash(password, 10);
-        // create the user
-        const user = await prisma.user.create({
-            data: {
-                username,
-                email,
-                password: hashedPassword,
-            },
-        });
-        // Create User and Verification Token in a Transaction
-        const newUser = await prisma.$transaction(async (transacton) => {
-            const verificationToken = crypto.randomBytes(32).toString('hex');
-              const createdUser = await transacton.user.create({
-                data: {
-                    username,
-                    email,
-                    password: hashedPassword,
-                },
-            });
-
-            // generate a unique verification token
-            await transacton.token.create({
-                data:{
-                    token: verificationToken,
-                    userId: createdUser.id,
-                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Token expires in 24 hours
-                    type: "ACTIVATE",
-                }
-            });
-            return { user: createdUser, token: verificationToken };
-            
-        });
-       
-        // send activation email
-        await sendActivationEmail(newUser.user.email, newUser.token);
-        return { message: "Registration successful. Please check your email to activate your account." };
-
+  async register({ username, email, password }: RegisterInput) {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new AppError("User already exists", 409);
     }
 
-    // activate user account
-    async activate(token: string) {
-        // find the token in the database
-        const dbToken = await prisma.token.findUnique({ where: { token } });
-        // if token is not found or expired, throw an error
-        if (!dbToken || dbToken.expiresAt < new Date() || dbToken.type !== "ACTIVATE") {
-            throw new Error("Invalid or expired token");
-        }
-        // activate the user account 
-        await prisma.user.update({
-            where: { id: dbToken.userId },
-            data: { isActivated: true },
-        })
-        // delete the token after activation
-        await prisma.token.delete({ where: { id: dbToken.id } });
-        return { message: "Account activated successfully. You can now log in." };
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // This requires MongoDB Replica Set
+    const result = await prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: {
+          username,
+          email,
+          password: hashedPassword,
+        },
+      });
+
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+
+      await tx.token.create({
+        data: {
+          token: verificationToken,
+          userId: createdUser.id,
+          // Good practice: Use a helper for dates
+          expiresAt: getExpiryDate(1), // 1 day
+          type: "ACTIVATE",
+        },
+      });
+
+      return { user: createdUser, token: verificationToken };
+    });
+
+    await sendActivationEmail(result.user.email, result.token);
+
+    return { message: "Registration successful. Please check your email." };
+  }
+
+  // login user and return JWT token
+  async login(email: string, password: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) throw new AppError("Invalid email or password", 401);
+
+    const isValid = await bcrypt.compare(password, user.password);
+    if (!isValid) throw new AppError("Invalid email or password", 401);
+
+    // jwt secret should be defined in .env and should be a string
+    if (!process.env.JWT_SECRET)
+      throw new AppError("JWT_SECRET is not defined in environment variables", 500);
+
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+    return { token, user };
+  }
+
+  async activate(token: string) {
+    const dbToken = await prisma.token.findUnique({ where: { token } });
+
+    if (
+      !dbToken ||
+      dbToken.expiresAt < new Date() ||
+      dbToken.type !== "ACTIVATE"
+    ) {
+      throw new AppError("Invalid or expired token", 400);
     }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: dbToken.userId },
+        data: { isActivated: true },
+      }),
+      prisma.token.delete({ where: { id: dbToken.id } }),
+    ]);
+
+    return { message: "Account activated successfully." };
+  }
+
+  async getProfile(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        isActivated: true,
+      },
+    });
+
+    if (!user) throw new AppError("User not found", 404);
+    return user;
+  }
 }
