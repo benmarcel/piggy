@@ -1,15 +1,15 @@
 import { AuthService } from "../services/auth.service";
 import type { Request, Response } from "express";
-import { userSchema, activateSchema } from "../validator/auth.validator";
+import type { RegisterInput, LoginInput, ActivateInput } from "../validator/auth.validator";
 const authService = new AuthService();
 
 //   Note: errors are handled by the error handling middleware, so we don't need to catch them here. If any error occurs, it will be passed to the error handler. and since we are using zod for validation, if the input is invalid, it will throw a zod error which will also be handled by the error handler. remember  if you are using a lower version (v4) of express use a try-catch block and call next(err) in the catch block to pass the error to the error handler.
 export const registerUser = async (req: Request, res: Response) => {
-  const { username, email, password } = req.body;
-  //   validate input using zod schema
-  const validatedData = userSchema.parse({ username, email, password });
+  const { username, email, password } = req.body as RegisterInput;
+  //   middleware handles validation
+  
   // call the register method of the auth service
-  const result = await authService.register(validatedData);
+  const result = await authService.register({username, password, email});
   // send response to the client
   res.status(201).json({
     success: true,
@@ -18,11 +18,11 @@ export const registerUser = async (req: Request, res: Response) => {
 };
 
 export const activateUser = async (req: Request, res: Response) => {
-  const { token } = req.query;
-  // validate input using zod schema
-  const validatedData = activateSchema.parse({ token });
+  const { token } = req.query as ActivateInput;
+  // middleware handles validation
+ if (typeof token !== "string") {}
   // call the activate method of the auth service
-  const result = await authService.activate(validatedData.token);
+  const result = await authService.activate(token);
   // send response to the client
   res.status(200).json({
     success: true,
@@ -32,16 +32,12 @@ export const activateUser = async (req: Request, res: Response) => {
 
 // login user and return JWT token
 export const loginUser = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  // validate input using zod schema
-  //   pick helps us to select only the fields we need for login, which are email and password. this way we can reuse the same userSchema for both registration and login without having to create a separate schema for login.
-  const validatedData = userSchema
-    .pick({ email: true, password: true })
-    .parse({ email, password });
+  const { email, password } = req.body as LoginInput;
+ 
   // call the login method of the auth service
   const result = await authService.login(
-    validatedData.email,
-    validatedData.password,
+    email,
+    password,
   );
   // send response to the client
   res.status(200).json({
