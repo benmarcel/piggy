@@ -38,7 +38,6 @@ export class AuthService {
         data: {
           token: verificationToken,
           userId: createdUser.id,
-          // Good practice: Use a helper for dates
           expiresAt: getExpiryDate(1), // 1 day
           type: "ACTIVATE",
         },
