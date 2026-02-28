@@ -1,6 +1,6 @@
 import { AuthService } from "../services/auth.service";
 import type { Request, Response } from "express";
-import type { RegisterInput, LoginInput, ActivateInput } from "../validator/auth.validator";
+import type { RegisterInput, LoginInput, ActivateInput } from "../validators/auth.validator";
 const authService = new AuthService();
 
 //   Note: errors are handled by the error handling middleware, so we don't need to catch them here. If any error occurs, it will be passed to the error handler. and since we are using zod for validation, if the input is invalid, it will throw a zod error which will also be handled by the error handler. remember  if you are using a lower version (v4) of express use a try-catch block and call next(err) in the catch block to pass the error to the error handler.

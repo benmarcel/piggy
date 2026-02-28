@@ -2,7 +2,7 @@ import express from "express";
 import { activateUser, getCurrentUser, loginUser, registerUser } from "../controllers/auth.controller";
 import {  isAuthenticated } from "../middlewares/isAuthenticated";
 import { validate } from "../middlewares/validator";
-import { loginSchema, registerSchema, activateSchema } from "../validator/auth.validator";
+import { loginSchema, registerSchema, activateSchema } from "../validators/auth.validator";
 const router = express.Router();
 
 router.post("/register", validate(registerSchema), registerUser);

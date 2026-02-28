@@ -62,6 +62,21 @@ model Pig {
   breedingsAsSow  Breeding[] @relation("SowBreedings")
   breedingsAsBoar Breeding[] @relation("BoarBreedings")
   healthRecords   Health[]
+   
+   // Parentage - add NoAction here
+  motherId  String?  @db.ObjectId
+  mother    Pig?     @relation("PigMother", fields: [motherId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  
+  fatherId  String?  @db.ObjectId
+  father    Pig?     @relation("PigFather", fields: [fatherId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // Link to Breeding - add NoAction here
+  breedingId  String?   @db.ObjectId
+  breeding    Breeding? @relation(fields: [breedingId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  // These stay as they are (the "many" side doesn't need the tags)
+  litterAsMother  Pig[]  @relation("PigMother")
+  litterAsFather  Pig[]  @relation("PigFather")
 
   @@unique([userId, tag])  // unique per farmer, not globally
 }
@@ -78,11 +93,12 @@ model Breeding {
   userId String @db.ObjectId
   user   User   @relation(fields: [userId], references: [id])
 
-  sowId String @db.ObjectId
-  sow   Pig    @relation("SowBreedings", fields: [sowId], references: [id])
+sowId String @db.ObjectId
+  sow   Pig    @relation("SowBreedings", fields: [sowId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   boarId String @db.ObjectId
-  boar   Pig    @relation("BoarBreedings", fields: [boarId], references: [id])
+  boar   Pig    @relation("BoarBreedings", fields: [boarId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  piglets  Pig[]  // piglets born from this event
 }
 
 model Health {
